@@ -54,9 +54,9 @@ fn main() {
             let decoded_data = decoded_data.splitn(2, '\0').collect::<Vec<&str>>()[1];
 
             if pretty_print {
-                println!("{}", decoded_data);
+                print!("{}", decoded_data);
             } else {
-                println!("{:?}", decoded_data);
+                print!("{:?}", decoded_data);
             }
         }
     }
