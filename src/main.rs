@@ -1,9 +1,11 @@
+use anyhow::{Context, Ok};
 use flate2::read::ZlibDecoder;
 #[allow(unused_imports)]
-use std::env;
-#[allow(unused_imports)]
 use std::fs;
-use std::io::Read;
+use std::{
+    ffi::CStr,
+    io::{BufRead, BufReader, Read, Write},
+};
 
 use clap::{Parser, Subcommand};
 
@@ -25,7 +27,14 @@ enum Command {
     },
 }
 
-fn main() {
+enum Kind {
+    Blob,
+    Tree,
+    Commit,
+    Tag,
+}
+
+fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
     match args.command {
@@ -37,36 +46,73 @@ fn main() {
     }
 }
 
-fn init() {
+fn init() -> anyhow::Result<()> {
     fs::create_dir(".git").unwrap();
     fs::create_dir(".git/objects").unwrap();
     fs::create_dir(".git/refs").unwrap();
     fs::write(".git/HEAD", "ref: refs/heads/main\n").unwrap();
-    println!("Initialized git directory")
+    Ok(())
 }
 
-fn cat_file(object_hash: &str, pretty_print: bool) {
-    //get the first two characters of the hash
-    let prefix = &object_hash[0..2];
-    //get the rest of the hash
-    let suffix = &object_hash[2..];
-    //get the file path
-    let file_path = format!(".git/objects/{}/{}", prefix, suffix);
-    //read the file
-    let contents = fs::read(file_path).unwrap();
+fn cat_file(object_hash: &str, pretty_print: bool) -> anyhow::Result<()> {
+    let f = fs::File::open(format!(
+        ".git/objects/{}/{}",
+        &object_hash[..2],
+        &object_hash[2..]
+    ))
+    .context("open in .git/objects")?;
+
     //decompress the file
-    let mut decoded_data_decoder = ZlibDecoder::new(contents.as_slice());
-    let mut decoded_data = String::new();
-    decoded_data_decoder
-        .read_to_string(&mut decoded_data)
-        .unwrap();
+    let decoded_data_reader = ZlibDecoder::new(f);
 
-    //remove the header from the decoded data
-    let decoded_data = decoded_data.splitn(2, '\0').collect::<Vec<&str>>()[1];
+    let mut decoded_data_reader = BufReader::new(decoded_data_reader);
 
-    if pretty_print {
-        print!("{}", decoded_data);
-    } else {
-        print!("{:?}", decoded_data);
+    let mut buf: Vec<u8> = Vec::new();
+
+    decoded_data_reader
+        .read_until(b'\0', &mut buf)
+        .context("Read head from object file")?;
+
+    let header = CStr::from_bytes_until_nul(&buf).context("parse head from object file")?;
+
+    let header = header.to_str().context("parse head from object file")?;
+
+    let Some((kind, size)) = header.split_once(' ') else {
+        anyhow::bail!("Invalid header - {header}");
+    };
+
+    let kind = match kind {
+        "blob" => Kind::Blob,
+        "tree" => Kind::Tree,
+        "commit" => Kind::Commit,
+        "tag" => Kind::Tag,
+        _ => anyhow::bail!("Unknown object type - {kind}"),
+    };
+
+    let size = size.parse::<usize>().context("parse size from header")?;
+
+    buf.clear();
+    buf.resize(size, 0);
+
+    decoded_data_reader
+        .read_exact(&mut buf)
+        .context("Read data from object file")?;
+
+    let n = decoded_data_reader
+        .read(&mut [0])
+        .context("Read null byte from object file")?;
+
+    anyhow::ensure!(n == 0, "Expected null byte at end of object file");
+
+    let stdout = std::io::stdout();
+    let mut stdout = stdout.lock();
+
+    match kind {
+        Kind::Blob => {
+            stdout.write_all(&buf).context("Write data to stdout")?;
+        }
+        _ => anyhow::bail!("Unknown object type"),
     }
+
+    Ok(())
 }
