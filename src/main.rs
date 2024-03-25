@@ -146,7 +146,7 @@ fn hash_object(file_path: &PathBuf, write: bool) -> anyhow::Result<()> {
             fs::File::create("temporary").context("create object file")?,
         );
         let hash = hash?;
-        fs::rename("temporary", format!(".git/objects/{}/{}", &hash[..2], &hash[2..]))?;
+        fs::rename("temporary", format!(".git/objects/{}/{}", &hash[..2], &hash[2..])).context("rename object file")?;
         hash
     } else {
         let hash = write_blob(&file_path, std::io::sink())?;
