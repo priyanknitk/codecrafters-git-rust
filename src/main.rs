@@ -1,10 +1,15 @@
 use anyhow::{Context, Ok};
-use flate2::read::ZlibDecoder;
+use flate2::{
+    read::ZlibDecoder,
+    write::ZlibEncoder,
+};
+use sha1::Digest;
 #[allow(unused_imports)]
 use std::fs;
 use std::{
     ffi::CStr,
-    io::{BufRead, BufReader, Read},
+    io::{BufRead, BufReader, Read, Write},
+    path::{Path, PathBuf},
 };
 
 use clap::{Parser, Subcommand};
@@ -25,6 +30,12 @@ enum Command {
 
         object_hash: String,
     },
+    HashObject {
+        #[clap(short = 'w')]
+        write: bool,
+
+        file: PathBuf,
+    },
 }
 
 enum Kind {
@@ -43,6 +54,7 @@ fn main() -> anyhow::Result<()> {
             pretty_print,
             object_hash,
         } => cat_file(&object_hash, pretty_print),
+        Command::HashObject { write, file } => hash_object(&file, write),
     }
 }
 
@@ -97,10 +109,69 @@ fn cat_file(object_hash: &str, _pretty_print: bool) -> anyhow::Result<()> {
         Kind::Blob => {
             let stdout = std::io::stdout();
             let mut stdout = stdout.lock();
-            let n = std::io::copy(&mut decoded_data_reader, &mut stdout).context("Write data to stdout")?;
-            anyhow::ensure!(n == size as u64, "Expected {size} bytes of data in object file");
+            let n = std::io::copy(&mut decoded_data_reader, &mut stdout)
+                .context("Write data to stdout")?;
+            anyhow::ensure!(
+                n == size as u64,
+                "Expected {size} bytes of data in object file"
+            );
         }
         _ => anyhow::bail!("Unknown object type"),
     }
     Ok(())
+}
+
+fn hash_object(file_path: &PathBuf, write: bool) -> anyhow::Result<()> {
+    fn write_blob<W>(file: &Path, writer: W) -> anyhow::Result<String>
+    where
+        W: Write,
+    {
+        let stat = fs::metadata(file).context("stat file")?;
+        let writer = ZlibEncoder::new(writer, flate2::Compression::default());
+        let mut writer = HashWriter {
+            hasher: sha1::Sha1::new(),
+            writer,
+        };
+        write!(writer, "blob {}\0", stat.len()).context("write header")?;
+        let mut file = fs::File::open(file).context("open file")?;
+        std::io::copy(&mut file, &mut writer).context("copy file to writer")?;
+        let hash = writer.hasher.finalize();
+        let _ = writer.writer.finish().context("finish writing")?;
+        Ok(hex::encode(hash))
+    }
+
+    let hash = if write {
+        let hash = write_blob(
+            &file_path,
+            fs::File::create("temporary").context("create object file")?,
+        );
+        let hash = hash?;
+        fs::rename("temporary", format!(".git/objects/{}/{}", &hash[..2], &hash[2..]))?;
+        hash
+    } else {
+        let hash = write_blob(&file_path, std::io::sink())?;
+        hash
+    };
+    println!("{hash}");
+    Ok(())
+}
+
+struct HashWriter<W> {
+    hasher: sha1::Sha1,
+    writer: W,
+}
+
+impl<W> Write for HashWriter<W>
+where
+    W: Write,
+{
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        let n = self.writer.write(&buf)?;
+        self.hasher.update(&buf[..n]);
+        std::io::Result::Ok(n)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.writer.flush()
+    }
 }
