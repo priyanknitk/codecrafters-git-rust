@@ -3,7 +3,7 @@ use std::env;
 #[allow(unused_imports)]
 use std::fs;
 use std::io::Read;
-use flate2::read::GzDecoder;
+use flate2::read::ZlibDecoder;
 
 use clap::{Parser, Subcommand};
 
@@ -46,7 +46,7 @@ fn main() {
             //read the file
             let contents = fs::read(file_path).unwrap();
             //decompress the file
-            let mut decoded_data_decoder =  GzDecoder::new(contents.as_slice());
+            let mut decoded_data_decoder =  ZlibDecoder::new(contents.as_slice());
             let mut decoded_data = String::new();
             decoded_data_decoder.read_to_string(&mut decoded_data).unwrap();
 
