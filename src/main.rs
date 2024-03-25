@@ -4,7 +4,7 @@ use flate2::read::ZlibDecoder;
 use std::fs;
 use std::{
     ffi::CStr,
-    io::{BufRead, BufReader, Read, Write},
+    io::{BufRead, BufReader, Read},
 };
 
 use clap::{Parser, Subcommand};
