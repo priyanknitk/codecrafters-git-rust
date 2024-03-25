@@ -91,28 +91,16 @@ fn cat_file(object_hash: &str, pretty_print: bool) -> anyhow::Result<()> {
 
     let size = size.parse::<usize>().context("parse size from header")?;
 
-    buf.clear();
-    buf.resize(size, 0);
-
-    decoded_data_reader
-        .read_exact(&mut buf)
-        .context("Read data from object file")?;
-
-    let n = decoded_data_reader
-        .read(&mut [0])
-        .context("Read null byte from object file")?;
-
-    anyhow::ensure!(n == 0, "Expected null byte at end of object file");
-
-    let stdout = std::io::stdout();
-    let mut stdout = stdout.lock();
+    let mut decoded_data_reader = decoded_data_reader.take(size as u64);
 
     match kind {
         Kind::Blob => {
-            stdout.write_all(&buf).context("Write data to stdout")?;
+            let stdout = std::io::stdout();
+            let mut stdout = stdout.lock();
+            let n = std::io::copy(&mut decoded_data_reader, &mut stdout).context("Write data to stdout")?;
+            anyhow::ensure!(n == size as u64, "Expected {size} bytes of data in object file");
         }
         _ => anyhow::bail!("Unknown object type"),
     }
-
     Ok(())
 }
