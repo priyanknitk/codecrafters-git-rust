@@ -1,8 +1,5 @@
 use anyhow::{Context, Ok};
-use flate2::{
-    read::ZlibDecoder,
-    write::ZlibEncoder,
-};
+use flate2::{read::ZlibDecoder, write::ZlibEncoder};
 use sha1::Digest;
 #[allow(unused_imports)]
 use std::fs;
@@ -135,18 +132,22 @@ fn hash_object(file_path: &PathBuf, write: bool) -> anyhow::Result<()> {
         write!(writer, "blob {}\0", stat.len()).context("write header")?;
         let mut file = fs::File::open(file).context("open file")?;
         std::io::copy(&mut file, &mut writer).context("copy file to writer")?;
-        let hash = writer.hasher.finalize();
         let _ = writer.writer.finish().context("finish writing")?;
+        let hash = writer.hasher.finalize();
         Ok(hex::encode(hash))
     }
 
     let hash = if write {
+        let temp = "temporary";
         let hash = write_blob(
             &file_path,
-            fs::File::create("temporary").context("create object file")?,
+            fs::File::create(temp).context("create object file")?,
         );
         let hash = hash?;
-        fs::rename("temporary", format!(".git/objects/{}/{}", &hash[..2], &hash[2..])).context("rename object file")?;
+
+        fs::create_dir_all(format!(".git/objects/{}", &hash[..2])).context("create object dir")?;
+        fs::rename(temp, format!(".git/objects/{}/{}", &hash[..2], &hash[2..]))
+            .context("rename object file")?;
         hash
     } else {
         let hash = write_blob(&file_path, std::io::sink())?;
