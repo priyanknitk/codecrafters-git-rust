@@ -54,7 +54,7 @@ fn init() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn cat_file(object_hash: &str, pretty_print: bool) -> anyhow::Result<()> {
+fn cat_file(object_hash: &str, _pretty_print: bool) -> anyhow::Result<()> {
     let f = fs::File::open(format!(
         ".git/objects/{}/{}",
         &object_hash[..2],
