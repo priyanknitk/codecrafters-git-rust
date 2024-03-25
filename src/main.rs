@@ -50,6 +50,9 @@ fn main() {
             let mut decoded_data = String::new();
             decoded_data_decoder.read_to_string(&mut decoded_data).unwrap();
 
+            //remove the header from the decoded data
+            let decoded_data = decoded_data.splitn(2, '\0').collect::<Vec<&str>>()[1];
+
             if pretty_print {
                 println!("{}", decoded_data);
             } else {
