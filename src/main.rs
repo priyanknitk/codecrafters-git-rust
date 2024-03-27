@@ -6,6 +6,7 @@ use std::path::PathBuf;
 use clap::{Parser, Subcommand};
 
 pub(crate) mod commands;
+pub(crate) mod objects;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -29,6 +30,12 @@ enum Command {
 
         file: PathBuf,
     },
+    LsTree {
+        #[clap(short = 'n')]
+        name_only: bool,
+
+        object_hash: String,
+    },
 }
 
 fn main() -> anyhow::Result<()> {
@@ -41,6 +48,7 @@ fn main() -> anyhow::Result<()> {
             object_hash,
         } => commands::cat_file::invoke(pretty_print, &object_hash),
         Command::HashObject { write, file } => commands::hash_object::invoke(&file, write),
+        Command::LsTree { name_only, object_hash } => commands::ls_tree::invoke(name_only, &object_hash),
     }
 }
 
