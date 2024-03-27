@@ -31,6 +31,7 @@ enum Command {
         file: PathBuf,
     },
     LsTree {
+        #[clap(long)]
         name_only: bool,
 
         tree_hash: String,
