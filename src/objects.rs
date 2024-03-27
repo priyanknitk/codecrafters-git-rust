@@ -1,6 +1,6 @@
 use core::fmt;
 use std::{
-    ffi::CStr, fmt::write, fs, io::{BufRead, BufReader, Read}, path::Display
+    ffi::CStr, fs, io::{BufRead, BufReader, Read}
 };
 
 use anyhow::Context;
