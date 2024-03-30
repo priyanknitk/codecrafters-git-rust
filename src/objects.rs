@@ -1,10 +1,13 @@
 use core::fmt;
 use std::{
-    ffi::CStr, fs, io::{BufRead, BufReader, Read}
+    ffi::CStr,
+    fs,
+    io::{BufRead, BufReader, Read, Write}, path::Path,
 };
 
 use anyhow::Context;
-use flate2::read::ZlibDecoder;
+use flate2::{read::ZlibDecoder, write::ZlibEncoder};
+use sha1::Digest;
 
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum Kind {
@@ -20,7 +23,7 @@ impl fmt::Display for Kind {
             Kind::Blob => write!(f, "blob"),
             Kind::Tree => write!(f, "tree"),
             Kind::Commit => write!(f, "commit"),
-            Kind::Tag => write!(f, "tag")
+            Kind::Tag => write!(f, "tag"),
         }
     }
 }
@@ -32,6 +35,18 @@ pub(crate) struct Object<R> {
 }
 
 impl Object<()> {
+    
+    pub(crate) fn blob_from_file(file: impl AsRef<Path>) -> anyhow::Result<Object<impl Read>> {
+        let file = file.as_ref();
+        let stat = fs::metadata(file).context("stat file")?;
+        let file = fs::File::open(file).context("open file")?;
+        Ok(Object {
+            kind: Kind::Blob,
+            expected_size: stat.len(),
+            reader: file,
+        })
+    }
+
     pub(crate) fn read_object(object_hash: &str) -> anyhow::Result<Object<impl BufRead>> {
         let f = fs::File::open(format!(
             ".git/objects/{}/{}",
@@ -76,5 +91,43 @@ impl Object<()> {
             expected_size: size as u64,
             reader: decoded_data_reader,
         })
+    }
+}
+
+impl<R> Object<R>
+where
+    R: Read,
+{
+    pub(crate) fn write(mut self, writer: impl Write) -> anyhow::Result<[u8; 20]> {
+        let writer = ZlibEncoder::new(writer, flate2::Compression::default());
+        let mut writer = HashWriter {
+            hasher: sha1::Sha1::new(),
+            writer,
+        };
+        write!(writer, "{} {}\0", self.kind, self.expected_size).context("write header")?;
+        std::io::copy(&mut self.reader, &mut writer).context("copy file to writer")?;
+        let _ = writer.writer.finish().context("finish writing")?;
+        let hash = writer.hasher.finalize();
+        Ok(hash.into())
+    }
+}
+
+struct HashWriter<W> {
+    hasher: sha1::Sha1,
+    writer: W,
+}
+
+impl<W> Write for HashWriter<W>
+where
+    W: Write,
+{
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        let n = self.writer.write(&buf)?;
+        self.hasher.update(&buf[..n]);
+        std::io::Result::Ok(n)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.writer.flush()
     }
 }

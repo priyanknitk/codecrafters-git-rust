@@ -36,6 +36,7 @@ enum Command {
 
         tree_hash: String,
     },
+    WriteTree
 }
 
 fn main() -> anyhow::Result<()> {
@@ -49,6 +50,7 @@ fn main() -> anyhow::Result<()> {
         } => commands::cat_file::invoke(pretty_print, &object_hash),
         Command::HashObject { write, file } => commands::hash_object::invoke(&file, write),
         Command::LsTree { name_only, tree_hash } => commands::ls_tree::invoke(name_only, &tree_hash),
+        Command::WriteTree => commands::write_tree::invoke(),
     }
 }
 
