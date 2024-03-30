@@ -1,7 +1,4 @@
-use std::{
-    fs,
-    path::Path,
-};
+use std::{fs, io::Cursor, path::Path};
 
 use anyhow::Context;
 use std::os::unix::fs::PermissionsExt;
@@ -40,18 +37,9 @@ fn write_tree_for(path: &Path) -> anyhow::Result<Option<[u8; 20]>> {
             };
             Some(hash)
         } else {
-            let tmp = "tmp";
             let hash = Object::blob_from_file(&path)?
-                .write(fs::File::create(tmp).context("create temp file")?)
-                .context("write object")?;
-            let hash_hex = hex::encode(hash);
-            fs::create_dir_all(format!(".git/objects/{}", &hash_hex[..2]))
-                .context("create object dir")?;
-            fs::rename(
-                tmp,
-                format!(".git/objects/{}/{}", &hash_hex[..2], &hash_hex[2..]),
-            )
-            .context("rename object file")?;
+                .write_to_object()
+                .context("write blob")?;
             Some(hash)
         };
         tree_object.extend(mode.as_bytes());
@@ -64,19 +52,13 @@ fn write_tree_for(path: &Path) -> anyhow::Result<Option<[u8; 20]>> {
     if tree_object.is_empty() {
         Ok(None)
     } else {
-        let tmp = "tmp";
         let hash = Object {
             kind: Kind::Tree,
             expected_size: tree_object.len() as u64,
-            reader: tree_object.as_slice(),
+            reader: Cursor::new(tree_object),
         }
-        .write(fs::File::create(tmp).context("create temp file")?)
-        .context("write object")?;
-
-        let hash_hex = hex::encode(hash);
-        fs::create_dir_all(format!(".git/objects/{}", &hash_hex[..2])).context("create object dir")?;
-        fs::rename(tmp, format!(".git/objects/{}/{}", &hash_hex[..2], &hash_hex[2..]))
-            .context("rename object file")?;
+        .write_to_object()
+        .context("write tree")?;
         Ok(Some(hash))
     }
 }

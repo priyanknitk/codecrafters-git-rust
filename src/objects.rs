@@ -2,7 +2,8 @@ use core::fmt;
 use std::{
     ffi::CStr,
     fs,
-    io::{BufRead, BufReader, Read, Write}, path::Path,
+    io::{BufRead, BufReader, Read, Write},
+    path::Path,
 };
 
 use anyhow::Context;
@@ -35,7 +36,6 @@ pub(crate) struct Object<R> {
 }
 
 impl Object<()> {
-    
     pub(crate) fn blob_from_file(file: impl AsRef<Path>) -> anyhow::Result<Object<impl Read>> {
         let file = file.as_ref();
         let stat = fs::metadata(file).context("stat file")?;
@@ -109,6 +109,22 @@ where
         let _ = writer.writer.finish().context("finish writing")?;
         let hash = writer.hasher.finalize();
         Ok(hash.into())
+    }
+
+    pub(crate) fn write_to_object(self) -> anyhow::Result<[u8; 20]> {
+        let tmp = "tmp";
+        let hash = self
+            .write(fs::File::create(tmp).context("create temp file")?)
+            .context("write object")?;
+        let hash_hex = hex::encode(hash);
+        fs::create_dir_all(format!(".git/objects/{}", &hash_hex[..2]))
+            .context("create object dir")?;
+        fs::rename(
+            tmp,
+            format!(".git/objects/{}/{}", &hash_hex[..2], &hash_hex[2..]),
+        )
+        .context("rename object file")?;
+        Ok(hash)
     }
 }
 
