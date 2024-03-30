@@ -15,7 +15,7 @@ pub(crate) fn invoke() -> anyhow::Result<()> {
 fn write_tree_for(path: &Path) -> anyhow::Result<Option<[u8; 20]>> {
     let mut dir =
         fs::read_dir(path).with_context(|| format!("open directory {}", path.display()))?;
-    let entries = BTreeMap::new();
+    let mut entries = BTreeMap::new();
     while let Some(entry) = dir.next() {
         let entry = entry.with_context(|| format!("read directory {}", path.display()))?;
         entries.insert(entry.file_name(), entry);
