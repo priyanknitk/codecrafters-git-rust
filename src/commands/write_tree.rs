@@ -18,7 +18,7 @@ fn write_tree_for(path: &Path) -> anyhow::Result<Option<[u8; 20]>> {
     let mut tree_object = Vec::new();
     while let Some(entry) = dir.next() {
         let entry = entry.with_context(|| format!("read directory {}", path.display()))?;
-        let file_name = path.file_name().context("get file name")?;
+        let file_name = entry.file_name();
         if file_name == ".git" {
             continue;
         }
