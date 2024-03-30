@@ -6,7 +6,7 @@ use std::os::unix::fs::PermissionsExt;
 use crate::objects::{Kind, Object};
 
 pub(crate) fn invoke() -> anyhow::Result<()> {
-    let tree_hash = write_tree_for(Path::new("./"))?;
+    let tree_hash = write_tree_for(Path::new("."))?;
     let hash = tree_hash.context("write tree")?;
     println!("{}", hex::encode(hash));
     Ok(())
@@ -19,6 +19,9 @@ fn write_tree_for(path: &Path) -> anyhow::Result<Option<[u8; 20]>> {
     while let Some(entry) = dir.next() {
         let entry = entry.with_context(|| format!("read directory {}", path.display()))?;
         let file_name = path.file_name().context("get file name")?;
+        if file_name == ".git" {
+            continue;
+        }
         let meta = entry.metadata().context("metadata for directory entry")?;
         let mode = if meta.is_dir() {
             "40000"
