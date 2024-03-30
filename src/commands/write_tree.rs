@@ -55,6 +55,7 @@ fn write_tree_for(path: &Path) -> anyhow::Result<Option<[u8; 20]>> {
     if tree_object.is_empty() {
         Ok(None)
     } else {
+        tree_object.sort_unstable();
         let hash = Object {
             kind: Kind::Tree,
             expected_size: tree_object.len() as u64,
