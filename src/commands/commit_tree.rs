@@ -24,6 +24,7 @@ pub(crate) fn invoke(message: &str, parent_commit: Option<String>, tree_hash: &s
     commit_object.extend("1620000000 +0000\n".as_bytes());
     commit_object.push(b'\n');
     commit_object.extend(message.as_bytes());
+    commit_object.push(b'\n');
 
     let commit_object = Object {
         kind: Kind::Commit,
