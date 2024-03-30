@@ -1,4 +1,4 @@
-use std::{fs, io::Cursor, path::Path};
+use std::{collections::BTreeMap, fs, io::Cursor, path::Path};
 
 use anyhow::Context;
 use std::os::unix::fs::PermissionsExt;
@@ -15,9 +15,14 @@ pub(crate) fn invoke() -> anyhow::Result<()> {
 fn write_tree_for(path: &Path) -> anyhow::Result<Option<[u8; 20]>> {
     let mut dir =
         fs::read_dir(path).with_context(|| format!("open directory {}", path.display()))?;
-    let mut tree_object = Vec::new();
+    let entries = BTreeMap::new();
     while let Some(entry) = dir.next() {
         let entry = entry.with_context(|| format!("read directory {}", path.display()))?;
+        entries.insert(entry.file_name(), entry);
+    }
+    let mut tree_object = Vec::new();
+    for btree_entry in entries.iter() {
+        let entry = btree_entry.1;
         let file_name = entry.file_name();
         if file_name == ".git" {
             continue;
@@ -55,7 +60,6 @@ fn write_tree_for(path: &Path) -> anyhow::Result<Option<[u8; 20]>> {
     if tree_object.is_empty() {
         Ok(None)
     } else {
-        tree_object.sort_unstable();
         let hash = Object {
             kind: Kind::Tree,
             expected_size: tree_object.len() as u64,
